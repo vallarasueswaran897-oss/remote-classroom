@@ -9,7 +9,7 @@ const supabase = createClient(
 function Classroom({ subject, teacher, user, onBack }) {
   const jitsiContainer = useRef(null);
   const apiRef = useRef(null);
-  const [messages, setMessages] = useState([{ sender: 'System', text: 'Welcome to ' + subject + ' class!' }]);
+  const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -40,6 +40,42 @@ function Classroom({ subject, teacher, user, onBack }) {
     fetchMaterials();
     fetchAssignments();
     fetchAttendance();
+    fetchMessages();
+
+    // Realtime chat subscription
+    const chatSub = supabase
+      .channel('chat:' + subject)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `subject=eq.${subject}`
+      }, (payload) => {
+        setMessages(prev => [...prev, payload.new]);
+      })
+      .subscribe();
+
+    // Realtime materials subscription
+    const materialSub = supabase
+      .channel('materials:' + subject)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'materials',
+        filter: `subject=eq.${subject}`
+      }, () => fetchMaterials())
+      .subscribe();
+
+    // Realtime attendance subscription
+    const attendanceSub = supabase
+      .channel('attendance:' + subject)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'attendance',
+        filter: `subject=eq.${subject}`
+      }, () => fetchAttendance())
+      .subscribe();
 
     const script = document.createElement('script');
     script.src = 'https://meet.jit.si/external_api.js';
@@ -58,11 +94,20 @@ function Classroom({ subject, teacher, user, onBack }) {
       apiRef.current = api;
     };
     document.body.appendChild(script);
+
     return () => {
       if (apiRef.current) apiRef.current.dispose();
       if (document.body.contains(script)) document.body.removeChild(script);
+      supabase.removeChannel(chatSub);
+      supabase.removeChannel(materialSub);
+      supabase.removeChannel(attendanceSub);
     };
   }, [subject, teacher, user, isTeacher]);
+
+  const fetchMessages = async () => {
+    const { data } = await supabase.from('messages').select('*').eq('subject', subject).order('created_at');
+    if (data) setMessages(data);
+  };
 
   const fetchMaterials = async () => {
     const { data } = await supabase.from('materials').select('*').eq('subject', subject);
@@ -77,6 +122,16 @@ function Classroom({ subject, teacher, user, onBack }) {
   const fetchAttendance = async () => {
     const { data } = await supabase.from('attendance').select('*').eq('subject', subject);
     if (data) setAttendance(data);
+  };
+
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
+    await supabase.from('messages').insert([{
+      sender: user ? user.name : 'Unknown',
+      text: newMessage,
+      subject
+    }]);
+    setNewMessage('');
   };
 
   const uploadMaterial = async () => {
@@ -98,14 +153,12 @@ function Classroom({ subject, teacher, user, onBack }) {
     setMaterialTitle('');
     setSelectedFile(null);
     setUploading(false);
-    fetchMaterials();
     alert('File uploaded!');
   };
 
   const deleteMaterial = async (id) => {
     if (!window.confirm('Delete this material?')) return;
     await supabase.from('materials').delete().eq('id', id);
-    fetchMaterials();
   };
 
   const addAssignment = async () => {
@@ -127,21 +180,13 @@ function Classroom({ subject, teacher, user, onBack }) {
     alert('Submitted!');
   };
 
-  const sendMessage = () => {
-    if (!newMessage.trim()) return;
-    setMessages([...messages, { sender: user ? user.name : 'You', text: newMessage }]);
-    setNewMessage('');
-  };
-
   const getFileIcon = (filename) => {
     if (!filename) return '📄';
     const ext = filename.split('.').pop().toLowerCase();
     if (ext === 'pdf') return '📕';
     if (['doc', 'docx'].includes(ext)) return '📘';
     if (['ppt', 'pptx'].includes(ext)) return '📙';
-    if (['xls', 'xlsx'].includes(ext)) return '📗';
     if (['jpg', 'jpeg', 'png'].includes(ext)) return '🖼';
-    if (['mp4', 'mkv'].includes(ext)) return '🎬';
     return '📄';
   };
 
@@ -192,9 +237,7 @@ function Classroom({ subject, teacher, user, onBack }) {
             <button style={tabStyle('materials')} onClick={() => setActiveTab('materials')}>📚 Materials</button>
             <button style={tabStyle('assignments')} onClick={() => setActiveTab('assignments')}>📝 Tasks</button>
             {isTeacher && (
-              <button style={tabStyle('attendance')} onClick={() => { setActiveTab('attendance'); fetchAttendance(); }}>
-                ✅ Attendance
-              </button>
+              <button style={tabStyle('attendance')} onClick={() => setActiveTab('attendance')}>✅ Attendance</button>
             )}
           </div>
 
@@ -202,6 +245,7 @@ function Classroom({ subject, teacher, user, onBack }) {
             {activeTab === 'chat' && (
               <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f8f9fa', padding: '10px', borderRadius: '5px', marginBottom: '10px' }}>
+                  {messages.length === 0 && <p style={{ color: '#999', textAlign: 'center' }}>No messages yet. Say hi!</p>}
                   {messages.map((msg, i) => (
                     <p key={i} style={{ margin: '5px 0' }}>
                       <b style={{ color: msg.sender === (user ? user.name : 'You') ? '#007bff' : '#333' }}>{msg.sender}:</b> {msg.text}
@@ -225,34 +269,34 @@ function Classroom({ subject, teacher, user, onBack }) {
               <div>
                 {isTeacher && (
                   <div style={{ backgroundColor: '#f0f8ff', padding: '12px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #b8daff' }}>
-                    <p style={{ margin: '0 0 8px 0', fontWeight: 'bold', color: '#004085' }}>📁 Upload File</p>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>📁 Upload File</p>
                     <input placeholder="Material Title" value={materialTitle}
                       onChange={(e) => setMaterialTitle(e.target.value)}
                       style={{ width: '100%', padding: '7px', marginBottom: '8px', borderRadius: '5px', border: '1px solid #ddd', boxSizing: 'border-box' }} />
-                    <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.mp4"
+                    <input id="fileInput" type="file"
                       style={{ display: 'none' }} onChange={(e) => setSelectedFile(e.target.files[0])} />
                     <div onClick={() => document.getElementById('fileInput').click()}
-                      style={{ border: '2px dashed #007bff', borderRadius: '8px', padding: '15px', textAlign: 'center', marginBottom: '8px', backgroundColor: '#f8f9fa', cursor: 'pointer' }}>
-                      {selectedFile ? <p style={{ margin: 0, color: '#28a745', fontWeight: 'bold' }}>{selectedFile.name}</p>
-                        : <p style={{ margin: 0, color: '#666', fontSize: '13px' }}>Click to select file</p>}
+                      style={{ border: '2px dashed #007bff', borderRadius: '8px', padding: '15px', textAlign: 'center', marginBottom: '8px', cursor: 'pointer' }}>
+                      {selectedFile ? <p style={{ margin: 0, color: '#28a745' }}>{selectedFile.name}</p>
+                        : <p style={{ margin: 0, color: '#666' }}>Click to select file</p>}
                     </div>
                     <button onClick={uploadMaterial} disabled={uploading}
-                      style={{ width: '100%', padding: '9px', backgroundColor: uploading ? '#6c757d' : '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: uploading ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>
+                      style={{ width: '100%', padding: '9px', backgroundColor: uploading ? '#6c757d' : '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
                       {uploading ? '⏳ Uploading...' : '📤 Upload File'}
                     </button>
                   </div>
                 )}
-                <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>📚 Materials ({materials.length})</p>
+                <p style={{ fontWeight: 'bold' }}>📚 Materials ({materials.length})</p>
                 {materials.length === 0 && <p style={{ color: '#666', textAlign: 'center' }}>No materials yet.</p>}
                 {materials.map((m) => (
                   <div key={m.id} style={{ border: '1px solid #ddd', padding: '10px', borderRadius: '8px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14px' }}>{getFileIcon(m.filename)} {m.title}</p>
+                      <p style={{ margin: 0, fontWeight: 'bold' }}>{getFileIcon(m.filename)} {m.title}</p>
                       <p style={{ margin: '3px 0', fontSize: '12px', color: '#666' }}>{m.filename} | By {m.teacher_name}</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '5px', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', gap: '5px' }}>
                       <a href={m.filepath} target="_blank" rel="noreferrer"
-                        style={{ padding: '5px 10px', backgroundColor: '#28a745', color: 'white', borderRadius: '5px', textDecoration: 'none', fontSize: '12px', textAlign: 'center' }}>
+                        style={{ padding: '5px 10px', backgroundColor: '#28a745', color: 'white', borderRadius: '5px', textDecoration: 'none', fontSize: '12px' }}>
                         📥 Download
                       </a>
                       {isTeacher && (
@@ -274,7 +318,7 @@ function Classroom({ subject, teacher, user, onBack }) {
                     <input placeholder="Assignment Title" value={newAssignment.title}
                       onChange={(e) => setNewAssignment({ ...newAssignment, title: e.target.value })}
                       style={{ width: '100%', padding: '7px', marginBottom: '7px', borderRadius: '5px', border: '1px solid #ddd', boxSizing: 'border-box' }} />
-                    <input placeholder="Description (optional)" value={newAssignment.description}
+                    <input placeholder="Description" value={newAssignment.description}
                       onChange={(e) => setNewAssignment({ ...newAssignment, description: e.target.value })}
                       style={{ width: '100%', padding: '7px', marginBottom: '7px', borderRadius: '5px', border: '1px solid #ddd', boxSizing: 'border-box' }} />
                     <input type="date" value={newAssignment.dueDate}
@@ -294,12 +338,12 @@ function Classroom({ subject, teacher, user, onBack }) {
                     <p style={{ margin: '4px 0', fontSize: '12px', color: '#dc3545' }}>📅 Due: {a.due_date}</p>
                     {!isTeacher && (
                       <div style={{ marginTop: '8px' }}>
-                        <textarea placeholder="Type your answer here..."
+                        <textarea placeholder="Type your answer..."
                           value={submitText[a.id] || ''}
                           onChange={(e) => setSubmitText({ ...submitText, [a.id]: e.target.value })}
                           style={{ width: '100%', padding: '7px', borderRadius: '5px', border: '1px solid #ddd', boxSizing: 'border-box', height: '70px', resize: 'none' }} />
                         <button onClick={() => submitAssignment(a.id)}
-                          style={{ width: '100%', padding: '8px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '5px', fontWeight: 'bold' }}>
+                          style={{ width: '100%', padding: '8px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '5px' }}>
                           Submit Assignment
                         </button>
                       </div>
@@ -311,12 +355,12 @@ function Classroom({ subject, teacher, user, onBack }) {
 
             {activeTab === 'attendance' && isTeacher && (
               <div>
-                <p style={{ fontWeight: 'bold', margin: '0 0 12px 0' }}>✅ Attendance - {subject}</p>
+                <p style={{ fontWeight: 'bold' }}>✅ Attendance - {subject}</p>
                 {attendance.length === 0 && <p style={{ color: '#666', textAlign: 'center' }}>No students joined yet.</p>}
                 {attendance.map((a, i) => (
-                  <div key={i} style={{ border: '1px solid #c3e6cb', padding: '10px 12px', borderRadius: '8px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', backgroundColor: '#f0fff4' }}>
+                  <div key={i} style={{ border: '1px solid #c3e6cb', padding: '10px', borderRadius: '8px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', backgroundColor: '#f0fff4' }}>
                     <span>👤 <b>{a.student_name}</b></span>
-                    <span style={{ color: '#28a745', fontWeight: 'bold' }}>✅ Present | {a.date}</span>
+                    <span style={{ color: '#28a745' }}>✅ Present | {a.date}</span>
                   </div>
                 ))}
                 <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#e9ecef', borderRadius: '5px', textAlign: 'center' }}>
