@@ -21,6 +21,12 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
+
+      if (!response.ok) {
+        setError('API error: ' + response.status);
+        return;
+      }
+
       const data = await response.json();
       if (data.success) {
         setUser({ ...data, name: name });
@@ -29,7 +35,7 @@ function App() {
         setError('Wrong email or password!');
       }
     } catch (err) {
-      setError('Server not running! Start backend first.');
+      setError('Error: ' + err.message);
     }
   };
 
@@ -50,30 +56,31 @@ function App() {
         placeholder="Your Name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        style={{ padding: '10px', width: '250px', display: 'block', margin: '10px auto', borderRadius: '5px', border: '1px solid #ddd' }}
+        style={{ padding: '10px', width: '250px', display: 'block', margin: '10px auto', borderRadius: '5px', border: '1px solid #ccc' }}
       />
       <input
         placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        style={{ padding: '10px', width: '250px', display: 'block', margin: '10px auto', borderRadius: '5px', border: '1px solid #ddd' }}
+        style={{ padding: '10px', width: '250px', display: 'block', margin: '10px auto', borderRadius: '5px', border: '1px solid #ccc' }}
       />
       <input
         placeholder="Password"
         type="password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        style={{ padding: '10px', width: '250px', display: 'block', margin: '10px auto', borderRadius: '5px', border: '1px solid #ddd' }}
+        style={{ padding: '10px', width: '250px', display: 'block', margin: '10px auto', borderRadius: '5px', border: '1px solid #ccc' }}
       />
       {error && <p style={{ color: 'red' }}>{error}</p>}
       <br />
       <button
         onClick={handleLogin}
-        style={{ padding: '12px 40px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '16px' }}>
+        style={{ padding: '12px 40px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', fontSize: '16px', cursor: 'pointer' }}
+      >
         Login 🚀
       </button>
       <br /><br />
-      <div style={{ backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '8px', display: 'inline-block', textAlign: 'left' }}>
+      <div style={{ backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '8px', display: 'inline-block' }}>
         <p style={{ margin: '5px 0', color: '#666' }}>🎓 Student: student@gmail.com / 1234</p>
         <p style={{ margin: '5px 0', color: '#666' }}>👨‍🏫 Teacher: teacher@gmail.com / 1234</p>
       </div>
