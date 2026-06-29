@@ -42,38 +42,34 @@ function Classroom({ subject, teacher, user, onBack }) {
     fetchAttendance();
     fetchMessages();
 
-    // Realtime chat subscription
     const chatSub = supabase
-      .channel('chat:' + subject)
+      .channel('realtime-messages')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'messages',
-        filter: `subject=eq.${subject}`
+        table: 'messages'
       }, (payload) => {
-        setMessages(prev => [...prev, payload.new]);
+        if (payload.new.subject === subject) {
+          setMessages(prev => [...prev, payload.new]);
+        }
       })
       .subscribe();
 
-    // Realtime materials subscription
     const materialSub = supabase
-      .channel('materials:' + subject)
+      .channel('realtime-materials')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
-        table: 'materials',
-        filter: `subject=eq.${subject}`
+        table: 'materials'
       }, () => fetchMaterials())
       .subscribe();
 
-    // Realtime attendance subscription
     const attendanceSub = supabase
-      .channel('attendance:' + subject)
+      .channel('realtime-attendance')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'attendance',
-        filter: `subject=eq.${subject}`
+        table: 'attendance'
       }, () => fetchAttendance())
       .subscribe();
 
@@ -170,7 +166,7 @@ function Classroom({ subject, teacher, user, onBack }) {
 
   const submitAssignment = async (assignmentId) => {
     const text = submitText[assignmentId];
-    if (!text) return alert('Answer type pannunga!');
+    if (!text) return alert('Please type your answer!');
     await supabase.from('submissions').insert([{
       assignment_id: assignmentId,
       student_name: user.name,
