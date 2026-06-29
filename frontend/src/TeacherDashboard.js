@@ -7,29 +7,26 @@ function TeacherDashboard({ user }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newClass, setNewClass] = useState({ subject: '', time: '', date: '' });
 
-  useEffect(() => {
-    fetchClasses();
-  }, []);
-
-  const fetchClasses = async () => {
-    const res = await fetch('http://localhost:5000/classes');
-    const data = await res.json();
-    setClasses(data);
-  };
-
-  const addClass = async () => {
+ const addClass = () => {
     if (!newClass.subject || !newClass.time || !newClass.date) {
-      alert('எல்லாவற்றையும் fill பண்ணு!');
+      alert('Please fill all fields!');
       return;
     }
-    await fetch('http://localhost:5000/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newClass, teacherName: user.name })
-    });
+    const cls = {
+      id: Date.now(),
+      ...newClass,
+      teacherName: user.name,
+      students: 0
+    };
+    setClasses(prev => [...prev, cls]);
     setNewClass({ subject: '', time: '', date: '' });
     setShowAddForm(false);
-    fetchClasses();
+  };
+
+  const deleteClass = (id) => {
+    if (window.confirm('Delete this class?')) {
+      setClasses(classes.filter(cls => cls.id !== id));
+    }
   };
 
   const deleteClass = async (id) => {
