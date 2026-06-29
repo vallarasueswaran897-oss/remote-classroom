@@ -8,19 +8,18 @@ const supabase = createClient(
 );
 
 function Dashboard({ user }) {
-  const [classes, setClasses] = useState([]);
   const [classroom, setClassroom] = useState(null);
+  const [classes, setClasses] = useState([]);
 
   useEffect(() => {
     fetchClasses();
   }, []);
 
   const fetchClasses = async () => {
-    const today = new Date().toISOString().split('T')[0];
     const { data } = await supabase
       .from('classes')
       .select('*')
-      .eq('date', today);
+      .order('date', { ascending: true });
     if (data) setClasses(data);
   };
 
@@ -30,7 +29,7 @@ function Dashboard({ user }) {
         subject={classroom.subject}
         teacher={classroom.teacher_name}
         user={user}
-        onBack={() => setClassroom(null)}
+        onBack={() => { setClassroom(null); fetchClasses(); }}
       />
     );
   }
@@ -42,11 +41,11 @@ function Dashboard({ user }) {
         <p style={{ margin: '5px 0 0' }}>Welcome, {user.name}! 👋</p>
       </div>
 
-      <h3>📚 Today's Classes ({classes.length})</h3>
+      <h3>📚 All Classes ({classes.length})</h3>
 
       {classes.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px', color: '#666', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-          <p>No classes today!</p>
+          <p>No classes yet! Wait for your teacher to add classes.</p>
         </div>
       )}
 
@@ -55,13 +54,13 @@ function Dashboard({ user }) {
           <div>
             <h4 style={{ margin: 0 }}>{cls.subject}</h4>
             <p style={{ margin: '5px 0 0', color: '#666' }}>
-              {cls.teacher_name} | {cls.time} | {cls.date}
+              👨‍🏫 {cls.teacher_name} | 🕐 {cls.time} | 📅 {cls.date}
             </p>
           </div>
           <button
             onClick={() => setClassroom(cls)}
-            style={{ backgroundColor: '#007bff', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
-            Join Class
+            style={{ backgroundColor: '#28a745', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px' }}>
+            Join Class 🚀
           </button>
         </div>
       ))}
