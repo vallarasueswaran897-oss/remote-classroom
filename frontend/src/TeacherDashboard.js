@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Classroom from './Classroom';
 
 function TeacherDashboard({ user }) {
@@ -7,7 +7,7 @@ function TeacherDashboard({ user }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newClass, setNewClass] = useState({ subject: '', time: '', date: '' });
 
- const addClass = () => {
+  const addClass = () => {
     if (!newClass.subject || !newClass.time || !newClass.date) {
       alert('Please fill all fields!');
       return;
@@ -29,13 +29,6 @@ function TeacherDashboard({ user }) {
     }
   };
 
-  const deleteClass = async (id) => {
-    if (window.confirm('இந்த class delete பண்ணணுமா?')) {
-      await fetch('http://localhost:5000/classes/' + id, { method: 'DELETE' });
-      fetchClasses();
-    }
-  };
-
   if (classroom) {
     return (
       <Classroom
@@ -49,11 +42,10 @@ function TeacherDashboard({ user }) {
 
   return (
     <div style={{ fontFamily: 'Arial', padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-
       <div style={{ backgroundColor: '#28a745', color: 'white', padding: '20px', borderRadius: '8px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0 }}>Teacher Dashboard</h2>
-          <p style={{ margin: '5px 0 0 0' }}>Welcome, {user.name}!</p>
+          <p style={{ margin: '5px 0 0' }}>Welcome, {user.name}!</p>
         </div>
         <button
           onClick={() => setShowAddForm(!showAddForm)}
@@ -95,7 +87,7 @@ function TeacherDashboard({ user }) {
 
       {classes.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px', color: '#666', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-          <p>No classes yet! Click Add Class.</p>
+          <p>No classes yet! Click + Add Class.</p>
         </div>
       )}
 
@@ -103,11 +95,8 @@ function TeacherDashboard({ user }) {
         <div key={cls.id} style={{ border: '1px solid #ddd', padding: '15px', borderRadius: '8px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h4 style={{ margin: 0 }}>{cls.subject}</h4>
-            <p style={{ margin: '5px 0 0 0', color: '#666' }}>
+            <p style={{ margin: '5px 0 0', color: '#666' }}>
               {cls.teacherName} | {cls.time} | {cls.date}
-            </p>
-            <p style={{ margin: '3px 0 0 0', color: '#888', fontSize: '14px' }}>
-              {cls.students} Students
             </p>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -124,7 +113,6 @@ function TeacherDashboard({ user }) {
           </div>
         </div>
       ))}
-
     </div>
   );
 }
